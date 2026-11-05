@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>✨ 魔法點唱機</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1B0B3B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="點唱機">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="icon-192.png">
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+  <script>var currentGroup = (new URLSearchParams(location.search).get('group') || '我家').slice(0, 50);</script>
+  <script src="api.js"></script>
+  <style>
+  * { box-sizing: border-box; }
+
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #0B1021 0%, #1B0B3B 50%, #0B1B3D 100%); background-attachment: fixed; color: #FFFFFF; transition: font-size 0.3s ease; }
+  .page { display: none; padding: 15px; max-width: 1200px; margin: 0 auto; width: 100%; }
+  .page.active { display: block; animation: fadeIn 0.5s; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  button { font-size: 1em; padding: 10px 18px; margin: 5px; border-radius: 25px; border: none; cursor: pointer; background: linear-gradient(to right, #FFDF00, #D4AF37); color: #333; font-weight: bold; box-shadow: 0 4px 15px rgba(255, 223, 0, 0.4); transition: transform 0.1s; }
+  button:active { transform: scale(0.95); }
+  button.btn-cancel { background: #555; color: white; box-shadow: none; }
+  button.btn-add { background: linear-gradient(to right, #4CAF50, #2E7D32); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4); }
+
+  .tabs-container { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); }
+  .tab-btn { background: rgba(255,255,255,0.1); color: #FFF; border-radius: 10px; box-shadow: none; white-space: nowrap; }
+  .tab-btn.active { background: #FFDF00; color: #333; box-shadow: 0 0 10px rgba(255,223,0,0.5); }
+
+  .header-bar { display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 10px 15px; border-radius: 15px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.2); }
+
+  .login-box { text-align: center; margin-top: 15vh; }
+  .user-btn { display: block; width: 100%; max-width: 400px; margin: 0 auto 20px auto; font-size: 1.2em; padding: 20px; border-radius: 20px; }
+
+  .search-area { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; width: 100%; }
+  input[type="text"] { flex: 1 1 auto; min-width: 0; padding: 12px 15px; border-radius: 20px; border: 2px solid #FFDF00; font-size: 1em; background: rgba(0,0,0,0.5); color: white; outline: none; }
+  .search-area > button:last-child { flex: 0 0 auto; white-space: nowrap; padding: 12px 15px; }
+
+  .list-container { background: rgba(0,0,0,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); width: 100%; }
+  .list-item { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 10px; }
+
+  /* ✨ 圖片與標題：解鎖限制，完整換行 ✨ */
+  .list-item img { width: 120px; border-radius: 8px; cursor: pointer; object-fit: cover; aspect-ratio: 16/9; flex: 0 0 120px; }
+  .list-item-info { flex: 1 1 auto; min-width: 0; cursor: pointer; }
+  .list-item h4 { margin: 0; font-size: 1em; line-height: 1.4; white-space: normal; word-break: break-word; }
+
+  /* ✨ 極簡大方塊按鈕 ✨ */
+  .list-item .btn-add, .list-item .btn-cancel { flex: 0 0 55px; height: 55px; padding: 0; font-size: 1.5em; display: flex; justify-content: center; align-items: center; border-radius: 15px; margin: 0; }
+  .section-title { color: #FFDF00; margin-top: 0; font-size: 1.2em; }
+
+  /* =========================================
+     ✨ 新版網頁架構 (完美置頂魔法) ✨
+     ========================================= */
+  .main-layout { display: flex; flex-direction: column; gap: 15px; width: 100%; }
+
+  /* 手機版：播放器保護殼，吸附頂部時加上深色背景，避免文字透過去 */
+  #sticky-player-wrapper {
+    position: sticky; top: 0; z-index: 1000;
+    margin: -15px -15px 0 -15px; /* 抵銷頁面留白，達到滿版 */
+    padding: 15px;
+    background: rgba(11, 16, 33, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  #player-container { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+
+  /* 電腦/平板版：雙欄 CSS Grid 魔法 */
+  @media screen and (min-width: 850px) {
+    .main-layout { display: grid; grid-template-columns: 55% 1fr; grid-template-rows: auto 1fr; align-items: start; gap: 20px; }
+    #sticky-player-wrapper { grid-column: 1; grid-row: 1; top: 15px; background: transparent; backdrop-filter: none; padding: 0; margin: 0; border-bottom: none; }
+    .left-controls { grid-column: 1; grid-row: 2; }
+    .right-lists { grid-column: 2; grid-row: 1 / span 2; }
+  }
+
+  /* 🎤 動態字幕 */
+  #lyrics-box { margin-top: 10px; background: rgba(0,0,0,0.55); border-radius: 12px; padding: 8px 10px 12px; border: 1px solid rgba(255,223,0,0.25); }
+  .lyrics-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; font-size: 13px; color: #aaa; }
+  #lyrics-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .lyrics-tools { display: flex; gap: 4px; flex-wrap: wrap; }
+  .lyrics-tools button { font-size: 13px; padding: 4px 9px; margin: 0; border-radius: 12px; background: rgba(255,255,255,0.15); color: #fff; box-shadow: none; }
+  #lyrics-lines { text-align: center; line-height: 1.35; margin-top: 6px; }
+  .ly-line { min-height: 1.35em; word-break: break-word; transition: opacity 0.3s; }
+  .ly-prev, .ly-next { color: rgba(255,255,255,0.45); font-size: 0.72em; }
+  .ly-cur { font-weight: bold; margin: 4px 0; }
+  .ly-cur span {
+    background: linear-gradient(to right, #FFDF00 var(--p, 0%), #FFFFFF var(--p, 0%));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: none;
+  }
+
+  /* 靜態歌詞 (自動捲動) */
+  #lyrics-static { max-height: 5.2em; overflow-y: auto; text-align: center; line-height: 1.45; margin-top: 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent); padding: 1.2em 0; }
+  #lyrics-static::-webkit-scrollbar { display: none; }
+  #lyrics-static .st-line { color: rgba(255,255,255,0.55); transition: color 0.4s; min-height: 0.6em; word-break: break-word; }
+  #lyrics-static .st-line.on { color: #FFDF00; font-weight: bold; }
+
+  /* 歌詞候選清單 */
+  #lyrics-pick-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10001; display: none; align-items: flex-start; justify-content: center; padding: 30px 12px; overflow-y: auto; }
+  #lyrics-pick-box { background: #1e1e2f; border: 1px solid rgba(255,223,0,0.4); border-radius: 14px; width: 100%; max-width: 520px; padding: 14px; font-size: 16px; }
+  #lyrics-pick-box h3 { margin: 0 0 10px; color: #FFDF00; font-size: 18px; }
+  .lp-item { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.07); margin-bottom: 8px; cursor: pointer; }
+  .lp-item:active { background: rgba(255,223,0,0.25); }
+  .lp-title { font-weight: bold; color: #fff; }
+  .lp-meta { font-size: 13px; color: #aaa; margin-top: 3px; }
+  .lp-badge { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 8px; margin-right: 6px; }
+  .lp-badge.sync { background: #E91E63; color: #fff; }
+  .lp-badge.plain { background: #555; color: #ddd; }
+  .lyrics-tools button.pinned { background: #FFDF00; color: #000; }
+
+  /* 拖曳排序 */
+  .tab-btn.tab-chosen { box-shadow: 0 0 0 2px #FFDF00; transform: scale(1.06); }
+  .tabs-container .tab-btn { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .drag-handle { flex: 0 0 34px; height: 55px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; color: rgba(255,255,255,0.5); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .list-item.sort-ghost { opacity: 0.35; background: rgba(255,223,0,0.25); }
+  .list-item.sort-chosen { box-shadow: 0 0 0 2px #FFDF00; }
+  .list-item.now-playing { background: rgba(255,223,0,0.12); border-left: 4px solid #FFDF00; }
+
+  /* 手機橫屏：強制全螢幕 */
+  @media screen and (max-height: 500px) and (orientation: landscape) {
+    #sticky-player-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; padding: 0; margin: 0; z-index: 9999; }
+    #player-container { border-radius: 0; height: 100vh; }
+    .header-bar, .left-controls, .right-lists, #lyrics-box { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- 登入頁面 (加入新增使用者按鈕) -->
+  <div id="page-login" class="page active">
+    <div class="login-box">
+      <h1>✨ 魔法點唱機 ✨</h1>
+      <p style="color:#aaa; margin-bottom: 30px;">請點擊使用者進入</p>
+      <div id="user-list"><h2>載入中...</h2></div>
+
+      <!-- ✨ 新增使用者按鈕 ✨ -->
+      <button class="btn-add" style="margin-top: 30px; padding: 15px 30px; font-size: 1.1em;" onclick="openAddUserPrompt()">➕ 新增使用者</button>
+    </div>
+  </div>
+
+  <!-- 主頁面 -->
+  <div id="page-main" class="page">
+
+    <div class="header-bar">
+      <!-- ✨ 加入改名按鈕 ✨ -->
+      <span style="font-size: 1.2em; display: flex; align-items: center;">
+        👤 <span id="current-user-name" style="color: #FFDF00; font-weight: bold; margin-left: 5px;"></span>
+        <button onclick="openRenameUserPrompt()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; color: white; padding: 4px 8px; margin-left: 10px; font-size: 0.7em;">✏️ 改名</button>
+      </span>
+      <div>
+        <button onclick="changeFontSize(-2)">A-</button>
+        <button onclick="changeFontSize(2)">A+</button>
+        <button class="btn-cancel" onclick="logout()">登出</button>
+      </div>
+    </div>
+
+    <!-- 響應式雙欄架構 -->
+    <div class="main-layout">
+
+      <!-- 1. 播放器區塊 (絕對置頂) -->
+      <div id="sticky-player-wrapper">
+        <div id="player-container"><div id="player"></div></div>
+
+        <!-- 🎤 動態字幕 (直式時顯示在影片下方) -->
+        <div id="lyrics-box" style="display:none;">
+          <div class="lyrics-toolbar">
+            <span id="lyrics-info">🎤 動態字幕</span>
+            <span class="lyrics-tools">
+              <button onclick="changeLyricsFont(-2)">字−</button>
+              <button onclick="changeLyricsFont(2)">字＋</button>
+              <button onclick="adjustLyricsOffset(-0.5)" title="歌詞太慢">◀ 0.5秒</button>
+              <button onclick="adjustLyricsOffset(0.5)" title="歌詞太快">0.5秒 ▶</button>
+              <button id="lyrics-pin-btn" onclick="toggleLyricsPin()" title="記住這首用這份歌詞">📌</button>
+              <button onclick="openLyricsSearchPrompt()" title="歌詞不對？用關鍵字搜尋">🔍</button>
+            </span>
+          </div>
+          <div id="lyrics-lines">
+            <div class="ly-line ly-prev"></div>
+            <div class="ly-line ly-cur"><span></span></div>
+            <div class="ly-line ly-next"></div>
+          </div>
+          <!-- 找不到動態歌詞時：靜態歌詞，依播放進度自動捲動 -->
+          <div id="lyrics-static" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- 2. 控制面板與搜尋 (已移除防誤觸按鈕) -->
+      <div class="left-controls">
+        <div class="tools-area" style="text-align: center; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 15px;">
+          <!-- 循環模式 -->
+          <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <button id="loop-mode-btn" style="background: #4CAF50; color: white;" onclick="toggleLoopMode()">🔁 列表輪播</button>
+            <button id="lyrics-btn" style="background: #555; color: white;" onclick="toggleLyrics()">🎤 動態字幕：關</button>
+          </div>
+          <!-- 睡眠定時 -->
+          <span style="color:#FFDF00; font-weight: bold;">🌙 睡眠：</span>
+          <button onclick="setSleepTimer(30)">30分</button>
+          <button onclick="setSleepTimer(60)">1小時</button>
+          <button style="background: #222; color: #FFF; border: 1px solid #555;" onclick="immediateSleep()">立刻黑屏</button>
+          <button class="btn-cancel" onclick="cancelSleepTimer()">取消</button>
+          <div id="timer-status" style="color: #FFDF00; font-size: 0.9em; margin-top:5px; font-weight:bold;"></div>
+        </div>
+
+        <div class="search-area">
+          <input type="text" id="search-input" placeholder="輸入歌名，例如：鄧麗君、老歌...">
+          <button onclick="executeSearch()">搜尋</button>
+          <button id="voice-btn" onclick="voiceSearch()" style="display:none;" title="語音點歌">🎤</button>
+        </div>
+      </div>
+
+      <!-- 3. 歌單與搜尋結果 -->
+      <div class="right-lists">
+        <div id="search-results-box" class="list-container" style="display:none; border: 2px solid #4CAF50;">
+          <h3 class="section-title" style="border-bottom: 1px solid #4CAF50; padding-bottom: 10px;">🔍 搜尋結果
+            <button class="btn-cancel" style="float:right; padding:5px 15px; font-size:0.8em;" onclick="closeSearch()">關閉</button>
+          </h3>
+          <div id="search-list"></div>
+        </div>
+
+        <div class="list-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <h3 class="section-title" style="margin:0;">🎵 我的歌單</h3>
+            <button class="btn-add" onclick="createNewPlaylist()" style="font-size: 0.8em; padding: 5px 10px;">+ 新增歌單</button>
+          </div>
+          <div style="color:#888; font-size:0.65em; margin:4px 0;">長按歌單分頁可以左右拖曳調整順序</div>
+          <div id="playlist-tabs" class="tabs-container"></div>
+          <div id="playlist-list">載入中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 極度護眼的隱形黑屏 -->
+  <div id="sleep-overlay" onclick="wakeUp()" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000000; z-index:10000; justify-content:center; align-items:center; flex-direction:column; cursor:pointer;">
+    <h2 style="color: #222; font-size: 2.5em; margin-bottom: 0;">晚安 💤</h2>
+    <p id="sleep-text" style="color: #222; margin: 20px 0; font-size: 1.2em;">音樂播放中，輕觸螢幕任意處喚醒</p>
+  </div>
+
+  <!-- 通用的對話框 (新增歌單、改名、新增使用者共用) -->
+  <div id="custom-prompt-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:10001; justify-content:center; align-items:center;">
+    <div style="background:#1B0B3B; padding:25px; border-radius:15px; border:2px solid #FFDF00; width:85%; max-width:350px; text-align:center;">
+      <h3 id="custom-prompt-title" style="color:#FFDF00; margin-top:0; margin-bottom:20px;">請輸入名稱</h3>
+      <input type="text" id="custom-prompt-input" style="width:100%; padding:15px; margin-bottom:20px; border-radius:10px; border:none; font-size:1.1em; box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; gap: 10px;">
+        <button class="btn-cancel" style="flex:1; margin:0;" onclick="closeCustomPrompt()">取消</button>
+        <button class="btn-add" style="flex:1; margin:0;" onclick="submitCustomPrompt()">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  let currentUser = null;
+  let currentFontSize = 24;
+  let ytPlayer = null;
+  let allPlaylists = {};
+  let activePlaylistName = "";
+
+  let currentPlayIndex = -1;
+  let loopMode = 'all';
+  let currentVideoId = "";
+  let playingListName = "";   // 正在播放的是哪個歌單（切換分頁不會影響下一首）
+
+  let sleepTimer = null;
+
+  window.onload = function() { google.script.run.withSuccessHandler(renderUserList).getUsers(currentGroup); };
+
+  function renderUserList(users) {
+    const listDiv = document.getElementById('user-list'); listDiv.innerHTML = '';
+    users.forEach(user => {
+      const btn = document.createElement('button'); btn.className = 'user-btn'; btn.innerText = user.name;
+      btn.onclick = () => login(user);
+      listDiv.appendChild(btn);
+    });
+  }
+
+  function login(user) {
+    currentUser = user; currentFontSize = user.fontSize || 24;
+    document.getElementById('current-user-name').innerText = user.name;
+    applyFontSize();
+    document.getElementById('page-login').classList.remove('active');
+    document.getElementById('page-main').classList.add('active');
+
+    document.getElementById('playlist-list').innerHTML = "載入中...";
+    google.script.run.withSuccessHandler(updatePlaylistsData).getUserData(currentUser.id);
+  }
+
+  function logout() {
+    if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+    currentUser = null;
+    document.getElementById('page-main').classList.remove('active');
+    document.getElementById('page-login').classList.add('active');
+  }
+
+  let fontSaveTimer = null;
+  function changeFontSize(change) {
+    currentFontSize = Math.max(14, Math.min(48, currentFontSize + change)); applyFontSize();
+    clearTimeout(fontSaveTimer); // 連按時只在停手 1 秒後存一次
+    fontSaveTimer = setTimeout(() => google.script.run.updateFontSize(currentUser.id, currentFontSize), 1000);
+  }
+  function applyFontSize() { document.body.style.fontSize = currentFontSize + 'px'; }
+
+  function onYouTubeIframeAPIReady() {
+    ytPlayer = new YT.Player('player', { height: '100%', width: '100%', playerVars: { 'playsinline': 1 }, events: { 'onStateChange': onPlayerStateChange } });
+  }
+
+  function onPlayerStateChange(event) {
+    let currentList = allPlaylists[playingListName] || [];
+    if (event.data == YT.PlayerState.PLAYING) onLyricsVideoPlaying();
+    if (event.data == YT.PlayerState.ENDED) {
+      if (loopMode === 'single' && currentVideoId) {
+        playVideo(currentVideoId, currentPlayIndex);
+      } else if (currentList.length > 0) {
+        currentPlayIndex++;
+        if (currentPlayIndex >= currentList.length) currentPlayIndex = 0;
+        playVideo(currentList[currentPlayIndex].id, currentPlayIndex);
+      }
+    }
+  }
+
+  function playVideo(videoId, index) {
+    if (index >= 0) playingListName = activePlaylistName; // 從歌單點的才記住歌單
+    currentPlayIndex = index;
+    currentVideoId = videoId;
+    if(ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId);
+    document.querySelectorAll('#playlist-sortable .list-item').forEach(el =>
+      el.classList.toggle('now-playing', playingListName === activePlaylistName && el.dataset.id === videoId));
+  }
+
+  function toggleLoopMode() {
+    const btn = document.getElementById('loop-mode-btn');
+    if (loopMode === 'all') {
+      loopMode = 'single'; btn.innerText = "🔂 單曲循環"; btn.style.background = "#FF9800";
+    } else {
+      loopMode = 'all'; btn.innerText = "🔁 列表輪播"; btn.style.background = "#4CAF50";
+    }
+  }
+
+  function executeSearch() {
+    const query = document.getElementById('search-input').value; if(!query) return;
+    document.getElementById('search-list').innerHTML = "搜尋中...";
+    document.getElementById('search-results-box').style.display = 'block';
+    google.script.run.withSuccessHandler(renderSearchResults).searchYT(query);
+  }
+
+  // ✨ 更新：搜尋結果自動比對「已加入」狀態 ✨
+  function renderSearchResults(results) {
+    const listDiv = document.getElementById('search-list'); listDiv.innerHTML = '';
+
+    if(results.length > 0 && results[0].error) {
+       const msg = String(results[0].error).replace(/</g, '&lt;');
+       listDiv.innerHTML = `<span style="color:#FF4B2B;">⚠️ 搜尋失敗：${msg}<br>若是權限問題，請回 GAS 執行 [authYouTube]。</span>`;
+       return;
+    }
+    if(results.length === 0) { listDiv.innerHTML = "找不到影片，請換個關鍵字試試。"; return; }
+
+    // 取得目前歌單裡面「已經存在」的所有影片 ID
+    let currentList = allPlaylists[activePlaylistName] || [];
+    let existingIds = currentList.map(v => v.id);
+
+    results.forEach(video => {
+      const safeTitle = encodeURIComponent(video.title);
+      const item = document.createElement('div'); item.className = 'list-item';
+
+      let buttonHtml = "";
+      // 比對：如果這首歌的 ID 已經在歌單裡了
+      if (existingIds.includes(video.id)) {
+        // 顯示深綠色打勾，並且不加上 onclick 功能（防止重複按）
+        buttonHtml = `<button class="btn-add" style="background:#1B5E20; cursor:default;" title="已在此歌單中">✔️</button>`;
+      } else {
+        // 還沒加入，顯示 ➕ 號
+        buttonHtml = `<button class="btn-add" onclick="addToActivePlaylist(this, '${video.id}', '${safeTitle}', '${video.thumbnail}')">➕</button>`;
+      }
+
+      item.innerHTML = `
+        <img src="${video.thumbnail}" onclick="playVideo('${video.id}', -1)">
+        <div class="list-item-info" onclick="playVideo('${video.id}', -1)"><h4>${video.title}</h4></div>
+        ${buttonHtml}
+      `;
+      listDiv.appendChild(item);
+    });
+  }
+
+  function closeSearch() { document.getElementById('search-results-box').style.display = 'none'; }
+
+  function updatePlaylistsData(data) {
+    allPlaylists = data; let playlistNames = Object.keys(allPlaylists);
+    if (!activePlaylistName || !allPlaylists[activePlaylistName]) {
+      activePlaylistName = playlistNames.length > 0 ? playlistNames[0] : "";
+    }
+    renderTabs(); renderPlaylistList();
+
+    // 如果搜尋畫面開著，切換歌單或加歌後，重新整理搜尋結果的 ✔️ 狀態
+    if (document.getElementById('search-results-box').style.display === 'block') {
+      executeSearch();
+    }
+  }
+
+  let tabsSortable = null, tabSaveSeq = 0;
+  function renderTabs() {
+    const tabsDiv = document.getElementById('playlist-tabs'); tabsDiv.innerHTML = '';
+    Object.keys(allPlaylists).forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (name === activePlaylistName ? ' active' : '');
+      btn.innerText = name;
+      btn.dataset.name = name;
+      btn.onclick = () => { activePlaylistName = name; renderTabs(); renderPlaylistList(); };
+      tabsDiv.appendChild(btn);
+    });
+    // ✨ 歌單分頁拖曳排序：手機要「長按」才開始拖，避免跟左右滑動、點選衝突 ✨
+    if (typeof Sortable !== 'undefined' && !tabsSortable) {
+      tabsSortable = Sortable.create(tabsDiv, {
+        animation: 180, direction: 'horizontal', delay: 350, delayOnTouchOnly: true,
+        ghostClass: 'sort-ghost', chosenClass: 'tab-chosen',
+        onEnd: (evt) => {
+          if (evt.oldIndex === evt.newIndex) return;
+          const names = [...tabsDiv.querySelectorAll('.tab-btn')].map(b => b.dataset.name);
+          const reordered = {}; names.forEach(n => reordered[n] = allPlaylists[n]);
+          allPlaylists = reordered;
+          const seq = ++tabSaveSeq;
+          google.script.run
+            .withSuccessHandler(() => { if (seq === tabSaveSeq) toast('✔️ 歌單順序已儲存'); })
+            .withFailureHandler(() => { toast('⚠️ 歌單順序儲存失敗，重新載入'); google.script.run.withSuccessHandler(updatePlaylistsData).getUserData(currentUser.id); })
+            .reorderPlaylists(currentUser.id, names);
+        }
+      });
+    }
+  }
+
+  function renderPlaylistList() {
+    const listDiv = document.getElementById('playlist-list'); listDiv.innerHTML = '';
+    if (!activePlaylistName) { listDiv.innerHTML = "請先建立歌單！"; return; }
+
+    const currentList = allPlaylists[activePlaylistName];
+    const headerHtml = `
+      <div style="text-align:right; margin-bottom: 10px;">
+        <button class="btn-cancel" style="background:#2196F3; font-size: 0.8em; padding: 5px 10px; margin-right:5px;" onclick="openRenamePrompt()">✏️ 重新命名</button>
+        <button class="btn-cancel" style="font-size: 0.8em; padding: 5px 10px;" onclick="deleteCurrentPlaylist()">🗑️ 刪除 [${activePlaylistName}]</button>
+      </div>`;
+
+    if (currentList.length === 0) { listDiv.innerHTML = headerHtml + "此歌單是空的，快去搜尋歌曲吧！"; return; }
+
+    listDiv.innerHTML = headerHtml + `<div style="color:#888; font-size:0.65em; margin-bottom:6px;">按住左邊 ☰ 上下拖曳可以調整順序</div><div id="playlist-sortable"></div>`;
+    const sortDiv = document.getElementById('playlist-sortable');
+    currentList.forEach((video, index) => {
+      const item = document.createElement('div');
+      item.className = 'list-item' + (playingListName === activePlaylistName && currentVideoId === video.id ? ' now-playing' : '');
+      item.dataset.id = video.id;
+      item.innerHTML = `
+        <div class="drag-handle">☰</div>
+        <img src="${video.thumbnail}" onclick="playVideo('${video.id}', ${index})">
+        <div class="list-item-info" onclick="playVideo('${video.id}', ${index})"><h4>${video.title}</h4></div>
+        <button class="btn-cancel" style="background:#444;" onclick="removeFromPlaylist('${video.id}')">🗑️</button>
+      `;
+      sortDiv.appendChild(item);
+    });
+    initPlaylistSortable(sortDiv);
+  }
+
+  // ✨ 拖曳排序 ✨
+  let sortSaveSeq = 0;
+  function initPlaylistSortable(el) {
+    if (typeof Sortable === 'undefined') return; // CDN 沒載入就不啟用
+    Sortable.create(el, {
+      handle: '.drag-handle', draggable: '.list-item', animation: 180,
+      ghostClass: 'sort-ghost', chosenClass: 'sort-chosen',
+      onEnd: (evt) => {
+        if (evt.oldIndex === evt.newIndex) return;
+        const name = activePlaylistName;
+        const ids = [...el.querySelectorAll('.list-item')].map(x => x.dataset.id);
+        const byId = {}; (allPlaylists[name] || []).forEach(v => byId[v.id] = v);
+        allPlaylists[name] = ids.map(id => byId[id]).filter(Boolean);
+        // 正在播這個歌單的話，下一首要跟著新順序走
+        if (playingListName === name && currentPlayIndex >= 0) currentPlayIndex = ids.indexOf(currentVideoId);
+        renderPlaylistList();
+        const seq = ++sortSaveSeq;
+        google.script.run
+          .withSuccessHandler(() => { if (seq === sortSaveSeq) toast('✔️ 順序已儲存'); })
+          .withFailureHandler(err => { toast('⚠️ 順序儲存失敗，重新載入'); google.script.run.withSuccessHandler(updatePlaylistsData).getUserData(currentUser.id); })
+          .reorderPlaylist(currentUser.id, name, ids);
+      }
+    });
+  }
+
+  function addToActivePlaylist(btnElement, videoId, encodedTitle, thumbnail) {
+    if(!activePlaylistName) { alert("請先建立歌單！"); return; }
+    btnElement.innerText = "✔️"; btnElement.style.background = "#1B5E20";
+    btnElement.onclick = null; // 點擊後立刻失效，防止連點重複加入
+
+    const title = decodeURIComponent(encodedTitle);
+    google.script.run.withSuccessHandler(updatePlaylistsData).addVideoToPlaylist(currentUser.id, activePlaylistName, videoId, title, thumbnail);
+  }
+
+  // 修正：原本按鈕有呼叫，但函式不存在，刪除歌單沒反應
+  function deleteCurrentPlaylist() {
+    if (!activePlaylistName) return;
+    if (!confirm(`確定要刪除整個歌單 [${activePlaylistName}] 嗎？裡面的歌也會一起移除。`)) return;
+    const name = activePlaylistName;
+    activePlaylistName = "";
+    document.getElementById('playlist-list').innerHTML = "刪除中...";
+    google.script.run.withSuccessHandler(updatePlaylistsData).deletePlaylist(currentUser.id, name);
+  }
+
+  function removeFromPlaylist(videoId) {
+    if(confirm("確定要從清單移除這首歌嗎？")) {
+      document.getElementById('playlist-list').innerHTML = "更新中...";
+      google.script.run.withSuccessHandler(updatePlaylistsData).removeVideoFromPlaylist(currentUser.id, activePlaylistName, videoId);
+    }
+  }
+
+  // --- 對話框邏輯整合 ---
+  let promptMode = "";
+  let oldPlaylistName = "";
+
+  function openAddUserPrompt() {
+    promptMode = "createUser";
+    document.getElementById('custom-prompt-title').innerText = "請輸入新使用者名稱";
+    document.getElementById('custom-prompt-input').value = "";
+    document.getElementById('custom-prompt-overlay').style.display = 'flex';
+    document.getElementById('custom-prompt-input').focus();
+  }
+
+  function openRenameUserPrompt() {
+    promptMode = "renameUser";
+    document.getElementById('custom-prompt-title').innerText = "修改我的名稱";
+    document.getElementById('custom-prompt-input').value = currentUser.name;
+    document.getElementById('custom-prompt-overlay').style.display = 'flex';
+    document.getElementById('custom-prompt-input').focus();
+  }
+
+  function createNewPlaylist() {
+    promptMode = "createPlaylist";
+    document.getElementById('custom-prompt-title').innerText = "請輸入新歌單名稱";
+    document.getElementById('custom-prompt-input').value = "";
+    document.getElementById('custom-prompt-overlay').style.display = 'flex';
+    document.getElementById('custom-prompt-input').focus();
+  }
+
+  function openRenamePrompt() {
+    promptMode = "renamePlaylist"; oldPlaylistName = activePlaylistName;
+    document.getElementById('custom-prompt-title').innerText = `重新命名 [${activePlaylistName}]`;
+    document.getElementById('custom-prompt-input').value = activePlaylistName;
+    document.getElementById('custom-prompt-overlay').style.display = 'flex';
+    document.getElementById('custom-prompt-input').focus();
+  }
+
+  function closeCustomPrompt() { document.getElementById('custom-prompt-overlay').style.display = 'none'; }
+
+  function submitCustomPrompt() {
+    const name = document.getElementById('custom-prompt-input').value;
+    if (name && name.trim() !== "") {
+      closeCustomPrompt(); const newName = name.trim();
+
+      if (promptMode === "createPlaylist") {
+        document.getElementById('playlist-list').innerHTML = "建立中...";
+        activePlaylistName = newName;
+        google.script.run.withSuccessHandler(updatePlaylistsData).createPlaylist(currentUser.id, activePlaylistName);
+
+      } else if (promptMode === "renamePlaylist") {
+        document.getElementById('playlist-list').innerHTML = "重新命名中...";
+        activePlaylistName = newName;
+        google.script.run.withSuccessHandler(updatePlaylistsData).renamePlaylist(currentUser.id, oldPlaylistName, newName);
+
+      } else if (promptMode === "createUser") {
+        document.getElementById('user-list').innerHTML = "<h2>新增中...</h2>";
+        google.script.run.withSuccessHandler(renderUserList).addUser(currentGroup, newName);
+
+      } else if (promptMode === "lyricsSearch") {
+        showLyricsCandidates(newName);
+
+      } else if (promptMode === "renameUser") {
+        currentUser.name = newName;
+        document.getElementById('current-user-name').innerText = newName;
+        google.script.run.withSuccessHandler(renderUserList).renameUser(currentUser.id, newName, currentGroup);
+      }
+    }
+  }
+
+ // --- 睡眠黑屏 (加入全螢幕隱藏狀態列) ---
+  function immediateSleep() {
+    cancelSleepTimer();
+    document.getElementById('sleep-overlay').style.display = 'flex';
+    document.getElementById('sleep-text').innerText = "音樂播放中，輕觸螢幕任意處喚醒";
+
+    // 嘗試呼叫系統的全螢幕模式 (隱藏頂部狀態列)
+    try {
+      let elem = document.documentElement;
+      if (elem.requestFullscreen) { elem.requestFullscreen(); }
+      else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); } // Safari
+      else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); } // IE11
+    } catch(e) { console.log("您的手機不支援網頁強制全螢幕"); }
+  }
+
+  function setSleepTimer(minutes) {
+    cancelSleepTimer();
+    document.getElementById('timer-status').innerText = `⏱️ 音樂將於 ${minutes} 分鐘後停止`;
+    sleepTimer = setTimeout(() => {
+      if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+      // 定時到了也呼叫黑屏 (帶有全螢幕)
+      immediateSleep();
+      document.getElementById('sleep-text').innerText = "定時結束，好好休息 💤";
+      document.getElementById('timer-status').innerText = "";
+    }, minutes * 60 * 1000);
+  }
+
+  function cancelSleepTimer() { clearTimeout(sleepTimer); document.getElementById('timer-status').innerText = ""; }
+
+  function wakeUp() {
+    document.getElementById('sleep-overlay').style.display = 'none';
+
+    // 喚醒時退出全螢幕
+    try {
+      if (document.exitFullscreen) { document.exitFullscreen(); }
+      else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); } // Safari
+      else if (document.msExitFullscreen) { document.msExitFullscreen(); } // IE11
+    } catch(e) {}
+  }
+
+  // =========================================
+  // 🎤 動態字幕 (LRC 時間軸，卡拉OK 式逐行填色)
+  // =========================================
+  let lyricsOn = false, lyricsFont = 26, lyricsOffset = 0;
+  let lyricsLines = [];        // [{t: 秒, text: '...'}]
+  let lyricsVideoId = "";      // 目前字幕對應的影片
+  let lyricsIdx = -2, lyricsTick = null, lyBase = { t: -1, at: 0 };
+  let lyricsMode = 'synced';     // 'synced' 動態 / 'plain' 靜態
+  let plainWeights = [];         // 靜態歌詞每行的累積比重 (0~1)
+  let plainIdx = -1, userScrollUntil = 0;
+  let lyricsCurrent = null;      // 目前顯示的歌詞 {source, id, title, artist, query}
+  let lyricsSaved = false;       // 這支影片是否已記住歌詞
+  let lyricsLastQuery = "";      // 自動搜尋用的關鍵字（🔍 會預填）
+  const LYRICS_SRC_NAME = { lrclib: 'LRCLIB', netease: '網易雲' };
+  try {
+    lyricsOn = localStorage.getItem('jk_lyricsOn') === '1';
+    lyricsFont = parseInt(localStorage.getItem('jk_lyricsFont')) || 26;
+  } catch (e) {}
+  document.addEventListener('DOMContentLoaded', () => { updateLyricsButton(); applyLyricsFont(); });
+
+  function saveLyricsPref() {
+    try { localStorage.setItem('jk_lyricsOn', lyricsOn ? '1' : '0'); localStorage.setItem('jk_lyricsFont', lyricsFont); } catch (e) {}
+  }
+
+  function updateLyricsButton() {
+    const btn = document.getElementById('lyrics-btn');
+    btn.innerText = lyricsOn ? "🎤 動態字幕：開" : "🎤 動態字幕：關";
+    btn.style.background = lyricsOn ? "#E91E63" : "#555";
+    document.getElementById('lyrics-box').style.display = lyricsOn ? 'block' : 'none';
+  }
+
+  function toggleLyrics() {
+    lyricsOn = !lyricsOn; saveLyricsPref(); updateLyricsButton();
+    if (lyricsOn) {
+      lyricsVideoId = ""; // 強制重新抓目前這首
+      if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) onLyricsVideoPlaying();
+      else setLyricsInfo("🎤 播放歌曲後會自動搜尋歌詞");
+    } else {
+      stopLyricsTick();
+    }
+  }
+
+  function changeLyricsFont(d) { lyricsFont = Math.max(16, Math.min(60, lyricsFont + d)); applyLyricsFont(); saveLyricsPref(); }
+  function applyLyricsFont() {
+    document.getElementById('lyrics-lines').style.fontSize = lyricsFont + 'px';
+    document.getElementById('lyrics-static').style.fontSize = Math.round(lyricsFont * 0.8) + 'px';
+  }
+
+  function adjustLyricsOffset(d) {
+    if (lyricsMode === 'plain') d *= 4; // 靜態歌詞一次調 2 秒
+    lyricsOffset = Math.round((lyricsOffset + d) * 10) / 10;
+    if (lyricsSaved) {   // 已記住的歌，校正值也一起存，下次自動套用
+      clearTimeout(adjustLyricsOffset._t);
+      const vid = lyricsVideoId, off = lyricsOffset;
+      adjustLyricsOffset._t = setTimeout(() => google.script.run.saveLyricsOffset(vid, off), 1500);
+    }
+    toast(`歌詞時間 ${lyricsOffset > 0 ? '提前' : lyricsOffset < 0 ? '延後' : '校正'} ${Math.abs(lyricsOffset)} 秒`);
+    lyricsIdx = -2;
+  }
+
+  function setLyricsInfo(text) { document.getElementById('lyrics-info').innerText = text; }
+
+  function setLyricLines(prev, cur, next) {
+    const box = document.getElementById('lyrics-lines');
+    box.style.display = ''; document.getElementById('lyrics-static').style.display = 'none';
+    box.querySelector('.ly-prev').innerText = prev || '';
+    box.querySelector('.ly-cur span').innerText = cur || '';
+    box.querySelector('.ly-next').innerText = next || '';
+  }
+
+  // 每次開始播放時檢查：換歌了就重新抓歌詞
+  function onLyricsVideoPlaying() {
+    if (!lyricsOn || !ytPlayer || !ytPlayer.getVideoData) return;
+    const vid = ytPlayer.getVideoData().video_id;
+    if (vid && vid !== lyricsVideoId) { lyricsVideoId = vid; lyricsOffset = 0; loadLyrics(); }
+    startLyricsTick();
+  }
+
+  function loadLyrics(manualQuery) {
+    const data = ytPlayer.getVideoData ? ytPlayer.getVideoData() : {};
+    const vid = data.video_id;
+    lyricsLines = []; lyricsIdx = -2; lyricsMode = 'synced'; plainWeights = []; plainIdx = -1;
+    setLyricLines('', '🔎 搜尋歌詞中…', '');
+    setLyricsInfo("🎤 搜尋中…");
+    lyricsCurrent = null; lyricsSaved = false; updatePinButton();
+    google.script.run
+      .withSuccessHandler(res => {
+        if (vid !== lyricsVideoId && !manualQuery) return;   // 已經換歌了
+        if (res && res.saved) lyricsOffset = res.offset || 0;  // 套用記住的時間校正
+        renderLyrics(res);
+      })
+      .withFailureHandler(err => { setLyricLines('', '⚠️ 歌詞載入失敗', ''); setLyricsInfo('🎤 ' + err.message); })
+      .getLyrics(data.title || '', ytPlayer.getDuration ? ytPlayer.getDuration() : 0, manualQuery || '', vid || '', data.author || '');
+  }
+
+  function renderLyrics(res) {
+    if (res && res.query) lyricsLastQuery = res.query;
+    if (!res || !res.ok) {
+      lyricsLines = []; lyricsCurrent = null; lyricsSaved = false; updatePinButton();
+      if (res && res.busy) {
+        setLyricLines('', '⏳ 歌詞伺服器忙碌中', '按右上 🔍 再搜一次');
+        setLyricsInfo('🎤 伺服器忙碌');
+      } else {
+        setLyricLines(res && res.query ? `搜尋：${res.query}` : '', '😢 找不到這首的歌詞', '按右上 🔍 用歌名關鍵字搜尋');
+        setLyricsInfo('🎤 找不到歌詞');
+      }
+      return;
+    }
+    lyricsCurrent = { source: res.source, id: res.id, title: res.title, artist: res.artist, uncertain: res.uncertain };
+    lyricsSaved = !!res.saved;
+    updatePinButton();
+    if (res.plain) { renderPlainLyrics(res); return; }
+    lyricsMode = 'synced';
+    lyricsLines = parseLrc(res.lrc);
+    if (!lyricsLines.length) { renderLyrics({ ok: false, query: res.query }); return; }
+    setLyricsInfo(lyricsInfoText('🎤', ''));
+    lyricsIdx = -2;
+    startLyricsTick();
+  }
+
+  // 解析 LRC：[mm:ss.xx] 歌詞，同一行可有多個時間標籤
+  function parseLrc(lrc) {
+    const out = [];
+    String(lrc || '').split(/\r?\n/).forEach(row => {
+      const tags = [...row.matchAll(/\[(\d{1,2}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g)];
+      if (!tags.length) return;
+      const text = row.replace(/\[[^\]]*\]/g, '').trim();
+      tags.forEach(t => out.push({ t: parseInt(t[1]) * 60 + parseFloat(t[2].replace(':', '.')), text: text || '♪' }));
+    });
+    return out.sort((a, b) => a.t - b.t);
+  }
+
+  function startLyricsTick() { if (!lyricsTick) lyricsTick = setInterval(lyricsFrame, 100); }
+  function stopLyricsTick() { clearInterval(lyricsTick); lyricsTick = null; }
+
+  // YouTube 回報的時間不是每 0.1 秒更新，這裡補間讓填色更順
+  function lyricsNow() {
+    const r = ytPlayer.getCurrentTime(), now = performance.now();
+    if (r !== lyBase.t) lyBase = { t: r, at: now };
+    const playing = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
+    return (playing ? lyBase.t + Math.min((now - lyBase.at) / 1000, 1) : r) + lyricsOffset;
+  }
+
+  // 靜態歌詞：沒有時間軸，用「歌曲進度 × 字數比重」估算唱到哪一行
+  function renderPlainLyrics(res) {
+    lyricsMode = 'plain'; lyricsLines = [];
+    const lines = String(res.text || '').split(/\r?\n/).map(s => s.trim());
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    const box = document.getElementById('lyrics-static');
+    box.innerHTML = '';
+    lines.forEach(t => { const d = document.createElement('div'); d.className = 'st-line'; d.innerText = t; box.appendChild(d); });
+    const w = lines.map(t => t ? Math.max(4, t.length) : 2);   // 空行（段落間）也給一點時間
+    const total = w.reduce((a, b) => a + b, 0) || 1;
+    let acc = 0; plainWeights = w.map(x => (acc += x) / total);
+    plainIdx = -1; box.scrollTop = 0;
+    document.getElementById('lyrics-lines').style.display = 'none';
+    box.style.display = 'block';
+    setLyricsInfo(lyricsInfoText('📄', '靜態歌詞，捲動為估算'));
+    startLyricsTick();
+  }
+
+  function plainLyricsFrame() {
+    const box = document.getElementById('lyrics-static');
+    if (!plainWeights.length || box.style.display === 'none') return;
+    const dur = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+    if (!dur) return;
+    const start = Math.min(20, dur * 0.08), end = dur * 0.93;     // 粗估：扣掉前奏與尾奏
+    const p = Math.max(0, Math.min(1, (lyricsNow() - start) / (end - start)));
+    let i = plainWeights.findIndex(x => x >= p); if (i < 0) i = plainWeights.length - 1;
+    const els = box.children;
+    if (i !== plainIdx) {
+      if (els[plainIdx]) els[plainIdx].classList.remove('on');
+      if (els[i]) els[i].classList.add('on');
+      plainIdx = i;
+    }
+    if (Date.now() < userScrollUntil || !els[i]) return;       // 使用者正在手動捲，暫停自動捲 6 秒
+    const target = els[i].offsetTop - box.clientHeight * 0.4;
+    box.scrollTop += (target - box.scrollTop) * 0.15;             // 慢慢滑過去
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const box = document.getElementById('lyrics-static');
+    ['touchstart', 'wheel', 'mousedown'].forEach(ev => box.addEventListener(ev, () => userScrollUntil = Date.now() + 6000, { passive: true }));
+  });
+
+  function lyricsFrame() {
+    if (!lyricsOn) { stopLyricsTick(); return; }
+    if (lyricsMode === 'plain') { if (ytPlayer && ytPlayer.getCurrentTime) plainLyricsFrame(); return; }
+    if (!lyricsLines.length || !ytPlayer || !ytPlayer.getCurrentTime) return;
+    const t = lyricsNow();
+    let i = -1;
+    while (i + 1 < lyricsLines.length && lyricsLines[i + 1].t <= t) i++;
+
+    if (i !== lyricsIdx) {
+      lyricsIdx = i;
+      const L = lyricsLines;
+      if (i < 0) setLyricLines('', '♪ 前奏 ♪', L[0].text);
+      else setLyricLines(i > 0 ? L[i - 1].text : '', L[i].text, i + 1 < L.length ? L[i + 1].text : '');
+    }
+    // 目前這一行的填色進度
+    let p = 0;
+    if (i >= 0) {
+      const cur = lyricsLines[i], next = lyricsLines[i + 1];
+      const span = Math.min(next ? next.t - cur.t : 5, Math.max(2, cur.text.length * 0.45));
+      p = Math.max(0, Math.min(1, (t - cur.t) / span));
+    }
+    document.querySelector('#lyrics-lines .ly-cur span').style.setProperty('--p', (p * 100).toFixed(1) + '%');
+  }
+
+  function openLyricsSearchPrompt() {
+    promptMode = "lyricsSearch";
+    document.getElementById('custom-prompt-title').innerText = "輸入歌名關鍵字（可加歌手，例如：吻別 張學友）";
+    document.getElementById('custom-prompt-input').value =
+      (lyricsCurrent && lyricsCurrent.title) || lyricsLastQuery || '';
+    document.getElementById('custom-prompt-overlay').style.display = 'flex';
+    document.getElementById('custom-prompt-input').focus();
+  }
+
+  function lyricsInfoText(icon, note) {
+    const c = lyricsCurrent || {};
+    const tags = [LYRICS_SRC_NAME[c.source] || c.source];
+    if (note) tags.push(note);
+    if (lyricsSaved) tags.push('📌已記住');
+    else if (c.uncertain) tags.push('可能不準，可按🔍');
+    return `${icon} ${c.title || ''}${c.artist ? ' - ' + c.artist : ''}（${tags.join('・')}）`;
+  }
+
+  function updatePinButton() {
+    const b = document.getElementById('lyrics-pin-btn');
+    if (!b) return;
+    b.classList.toggle('pinned', lyricsSaved);
+    b.innerText = lyricsSaved ? '📌 已記住' : '📌';
+    b.style.display = lyricsCurrent ? '' : 'none';
+  }
+
+  // 📌 記住 / 取消記住（記錄在試算表 LyricsMap，全家共用）
+  function toggleLyricsPin() {
+    if (!lyricsCurrent || !lyricsVideoId) return;
+    const vid = lyricsVideoId;
+    if (lyricsSaved) {
+      if (!confirm('取消記住這首的歌詞？下次會重新自動搜尋。')) return;
+      lyricsSaved = false; updatePinButton(); refreshLyricsInfo();
+      google.script.run.withSuccessHandler(() => toast('已取消記住')).forgetLyricsChoice(vid);
+      return;
+    }
+    saveLyricsPick(vid, lyricsCurrent);
+  }
+
+  function saveLyricsPick(vid, c) {
+    lyricsSaved = true; updatePinButton(); refreshLyricsInfo();
+    google.script.run
+      .withSuccessHandler(() => toast('📌 已記住！下次播這首會直接用這份歌詞'))
+      .withFailureHandler(err => { lyricsSaved = false; updatePinButton(); toast('⚠️ 記錄失敗：' + err.message); })
+      .saveLyricsChoice(vid, c.source, c.id, c.title || '', c.artist || '', lyricsOffset, currentUser ? currentUser.name : '');
+  }
+
+  function refreshLyricsInfo() {
+    if (!lyricsCurrent) return;
+    setLyricsInfo(lyricsMode === 'plain' ? lyricsInfoText('📄', '靜態歌詞，捲動為估算') : lyricsInfoText('🎤', ''));
+  }
+
+  // 🔍 關鍵字搜尋 → 列出候選，點一個就套用並記住
+  function showLyricsCandidates(keyword) {
+    const ov = ensureLyricsPickOverlay();
+    const list = ov.querySelector('#lyrics-pick-list');
+    ov.querySelector('h3').innerText = `🔍 「${keyword}」的歌詞`;
+    list.innerHTML = '<div style="color:#aaa; padding:10px;">搜尋中…</div>';
+    ov.style.display = 'flex';
+    const dur = ytPlayer && ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+    google.script.run
+      .withSuccessHandler(items => renderLyricsCandidates(items, dur))
+      .withFailureHandler(err => list.innerHTML = `<div style="color:#FF4B2B; padding:10px;">⚠️ ${String(err.message).replace(/</g, '&lt;')}</div>`)
+      .searchLyricsCandidates(keyword, dur);
+  }
+
+  function renderLyricsCandidates(items, dur) {
+    const list = document.getElementById('lyrics-pick-list');
+    list.innerHTML = '';
+    if (!items || !items.length) {
+      list.innerHTML = '<div style="color:#aaa; padding:10px;">找不到 😢 試試只打歌名，或換成簡體字（例如：吻别）</div>';
+      return;
+    }
+    const fmt = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '';
+    items.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'lp-item';
+      const badge = c.synced ? '<span class="lp-badge sync">🎤 動態</span>' : '<span class="lp-badge plain">📄 靜態</span>';
+      const near = dur && c.duration && Math.abs(c.duration - dur) <= 8 ? ' ✅長度相符' : '';
+      el.innerHTML = `<div class="lp-title"></div><div class="lp-meta">${badge}<span class="lp-sub"></span></div>`;
+      el.querySelector('.lp-title').innerText = `${c.title || ''}${c.artist ? ' - ' + c.artist : ''}`;
+      el.querySelector('.lp-sub').innerText = [c.album, fmt(c.duration)].filter(Boolean).join('・') + near;
+      el.onclick = () => pickLyricsCandidate(c);
+      list.appendChild(el);
+    });
+  }
+
+  function pickLyricsCandidate(c) {
+    closeLyricsPick();
+    const vid = lyricsVideoId;
+    lyricsLines = []; lyricsIdx = -2; lyricsMode = 'synced'; plainWeights = []; plainIdx = -1; lyricsOffset = 0;
+    setLyricLines('', '⏳ 載入歌詞中…', '');
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) { toast('⚠️ ' + ((res && res.msg) || '這筆載入失敗，換一筆試試')); renderLyrics({ ok: false, query: c.title }); return; }
+        renderLyrics(res);
+        if (vid) saveLyricsPick(vid, lyricsCurrent);   // 自己挑的 = 合用，直接記住
+      })
+      .withFailureHandler(err => toast('⚠️ ' + err.message))
+      .getLyricsById(c.source, c.id, c.title, c.artist);
+  }
+
+  function ensureLyricsPickOverlay() {
+    let ov = document.getElementById('lyrics-pick-overlay');
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'lyrics-pick-overlay';
+    ov.innerHTML = `<div id="lyrics-pick-box">
+        <h3></h3>
+        <div style="font-size:13px; color:#aaa; margin-bottom:10px;">點選正確的那一首，會自動記住，下次播放直接使用</div>
+        <div id="lyrics-pick-list"></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button style="flex:1;" onclick="closeLyricsPick(); openLyricsSearchPrompt();">✏️ 換關鍵字</button>
+          <button class="btn-cancel" style="flex:1;" onclick="closeLyricsPick()">關閉</button>
+        </div>
+      </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) closeLyricsPick(); });
+    document.body.appendChild(ov);
+    return ov;
+  }
+  function closeLyricsPick() { const ov = document.getElementById('lyrics-pick-overlay'); if (ov) ov.style.display = 'none'; }
+
+  function toast(msg) {
+    let el = document.getElementById('jk-toast');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'jk-toast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#FFDF00;padding:10px 18px;border-radius:20px;z-index:10002;font-size:15px;transition:opacity .3s;';
+      document.body.appendChild(el);
+    }
+    el.innerText = msg; el.style.opacity = '1';
+    clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = '0', 1500);
+  }
+</script>
+  <script src="extra.js"></script>
+</body>
+</html>
