@@ -14,7 +14,21 @@
   <link rel="icon" href="icon-192.png">
   <script src="https://www.youtube.com/iframe_api"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
-  <script>var currentGroup = (new URLSearchParams(location.search).get('group') || '我家').slice(0, 50);</script>
+  <script>
+    // 群組：網址有 ?group= 就用並記住；沒有就用這支手機上次用的；都沒有才用「我家」
+    var currentGroup = (function () {
+      var fromUrl = new URLSearchParams(location.search).get('group');
+      var saved = null;
+      try { saved = localStorage.getItem('jk_group'); } catch (e) {}
+      var g = (fromUrl || saved || '我家').trim().slice(0, 50) || '我家';
+      try { localStorage.setItem('jk_group', g); } catch (e) {}
+      return g;
+    })();
+    document.addEventListener('DOMContentLoaded', function () {
+      var p = document.querySelector('#page-login .login-box p');
+      if (p) p.innerText = '🏠 ' + currentGroup + '　請點擊使用者進入';
+    });
+  </script>
   <script src="api.js"></script>
   <style>
   * { box-sizing: border-box; }
