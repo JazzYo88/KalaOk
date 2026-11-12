@@ -1,5 +1,6 @@
 // ✨ GitHub Pages 版才有的功能（GAS 框架裡做不到的）
 (function () {
+  window.JK_ARTWORK = new URL('icon-512.png', location.href).href;  // 鎖定畫面播放控制的封面圖
   // ---------- ⌨️ 打字時不要讓播放器擋住輸入框 ----------
   // 手機鍵盤打開後畫面只剩一小塊，頂端固定的「影片＋字幕」會把搜尋框整個蓋住
   var style = document.createElement('style');

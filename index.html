@@ -179,6 +179,14 @@
       <!-- 1. 播放器區塊 (絕對置頂) -->
       <div id="sticky-player-wrapper">
         <div id="player-container"><div id="player"></div></div>
+        <!-- ☁️ 雲端硬碟音樂播放器（播雲端音樂時取代影片區） -->
+        <div id="drive-player" style="display:none;">
+          <div class="dp-icon">☁️🎵</div>
+          <div class="dp-title" id="drive-title">雲端音樂</div>
+          <div class="dp-sub" id="drive-sub"></div>
+          <audio id="drive-audio" controls preload="auto" playsinline></audio>
+          <div class="dp-ctrl"><button onclick="driveStep(-1)">⏮ 上一首</button><button onclick="driveStep(1)">下一首 ⏭</button></div>
+        </div>
 
         <!-- 🎤 動態字幕 (直式時顯示在影片下方) -->
         <div id="lyrics-box" style="display:none;">
@@ -304,7 +312,7 @@
   }
 
   function logout() {
-    if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+    if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); stopDriveAudio();
     currentUser = null;
     document.getElementById('page-main').classList.remove('active');
     document.getElementById('page-login').classList.add('active');
@@ -327,20 +335,21 @@
     if (event.data == YT.PlayerState.PLAYING) onLyricsVideoPlaying();
     if (event.data == YT.PlayerState.ENDED) {
       if (loopMode === 'single' && currentVideoId) {
-        playVideo(currentVideoId, currentPlayIndex);
+        playVideo(currentVideoId, currentPlayIndex, playingListName);
       } else if (currentList.length > 0) {
         currentPlayIndex++;
         if (currentPlayIndex >= currentList.length) currentPlayIndex = 0;
-        playVideo(currentList[currentPlayIndex].id, currentPlayIndex);
+        playVideo(currentList[currentPlayIndex].id, currentPlayIndex, playingListName);
       }
     }
   }
 
-  function playVideo(videoId, index) {
-    if (index >= 0) playingListName = activePlaylistName; // 從歌單點的才記住歌單
+  function playVideo(videoId, index, listName) {
+    if (index >= 0) playingListName = listName || activePlaylistName; // 從歌單點的才記住歌單（自動換下一首時沿用原本的歌單）
     currentPlayIndex = index;
     currentVideoId = videoId;
-    if(ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId);
+    if (isDriveId(videoId)) playDriveAudio(videoId);
+    else { stopDriveAudio(); if(ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId); }
     document.querySelectorAll('#playlist-sortable .list-item').forEach(el =>
       el.classList.toggle('now-playing', playingListName === activePlaylistName && el.dataset.id === videoId));
   }
@@ -420,7 +429,7 @@
     Object.keys(allPlaylists).forEach(name => {
       const btn = document.createElement('button');
       btn.className = 'tab-btn' + (name === activePlaylistName ? ' active' : '');
-      btn.innerText = name;
+      btn.innerText = (isDrivePlaylist(name) && name.indexOf('☁️') !== 0 ? '☁️ ' : '') + name;
       btn.dataset.name = name;
       btn.onclick = () => { activePlaylistName = name; renderTabs(); renderPlaylistList(); };
       tabsDiv.appendChild(btn);
@@ -452,6 +461,7 @@
     const currentList = allPlaylists[activePlaylistName];
     const headerHtml = `
       <div style="text-align:right; margin-bottom: 10px;">
+        <button class="btn-cancel" style="background:#0F9D58; font-size: 0.8em; padding: 5px 10px; margin-right:5px;" onclick="openDriveImportPrompt()">☁️ 加入雲端音樂</button>
         <button class="btn-cancel" style="background:#2196F3; font-size: 0.8em; padding: 5px 10px; margin-right:5px;" onclick="openRenamePrompt()">✏️ 重新命名</button>
         <button class="btn-cancel" style="font-size: 0.8em; padding: 5px 10px;" onclick="deleteCurrentPlaylist()">🗑️ 刪除 [${activePlaylistName}]</button>
       </div>`;
@@ -466,7 +476,7 @@
       item.dataset.id = video.id;
       item.innerHTML = `
         <div class="drag-handle">☰</div>
-        <img src="${video.thumbnail}" onclick="playVideo('${video.id}', ${index})">
+        <img src="${thumbOf(video)}" onclick="playVideo('${video.id}', ${index})">
         <div class="list-item-info" onclick="playVideo('${video.id}', ${index})"><h4>${video.title}</h4></div>
         <button class="btn-cancel" style="background:#444;" onclick="removeFromPlaylist('${video.id}')">🗑️</button>
       `;
@@ -502,6 +512,7 @@
 
   function addToActivePlaylist(btnElement, videoId, encodedTitle, thumbnail) {
     if(!activePlaylistName) { alert("請先建立歌單！"); return; }
+    if (isDrivePlaylist(activePlaylistName)) { toast('☁️ 這是雲端音樂歌單，YouTube 歌曲請加到其他歌單'); return; }
     btnElement.innerText = "✔️"; btnElement.style.background = "#1B5E20";
     btnElement.onclick = null; // 點擊後立刻失效，防止連點重複加入
 
@@ -583,6 +594,9 @@
         document.getElementById('user-list').innerHTML = "<h2>新增中...</h2>";
         google.script.run.withSuccessHandler(renderUserList).addUser(currentGroup, newName);
 
+      } else if (promptMode === "driveImport") {
+        importDriveLinks(newName);
+
       } else if (promptMode === "lyricsSearch") {
         showLyricsCandidates(newName);
 
@@ -613,7 +627,7 @@
     cancelSleepTimer();
     document.getElementById('timer-status').innerText = `⏱️ 音樂將於 ${minutes} 分鐘後停止`;
     sleepTimer = setTimeout(() => {
-      if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+      if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); stopDriveAudio();
       // 定時到了也呼叫黑屏 (帶有全螢幕)
       immediateSleep();
       document.getElementById('sleep-text').innerText = "定時結束，好好休息 💤";
@@ -976,6 +990,7 @@
     clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = '0', 1500);
   }
 </script>
+  <script src="drive.js"></script>
   <script src="extra.js"></script>
 </body>
 </html>
