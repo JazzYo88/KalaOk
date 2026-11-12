@@ -135,11 +135,11 @@
   .list-item.sort-chosen { box-shadow: 0 0 0 2px #FFDF00; }
   .list-item.now-playing { background: rgba(255,223,0,0.12); border-left: 4px solid #FFDF00; }
 
-  /* 手機橫屏：強制全螢幕 */
+  /* 手機橫屏：強制全螢幕（打字中不套用：鍵盤打開讓畫面變矮時，避免搜尋框被藏起來） */
   @media screen and (max-height: 500px) and (orientation: landscape) {
-    #sticky-player-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; padding: 0; margin: 0; z-index: 9999; }
-    #player-container { border-radius: 0; height: 100vh; }
-    .header-bar, .left-controls, .right-lists, #lyrics-box { display: none !important; }
+    body:not(.typing) #sticky-player-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; padding: 0; margin: 0; z-index: 9999; }
+    body:not(.typing) #player-container { border-radius: 0; height: 100vh; }
+    body:not(.typing) .header-bar, body:not(.typing) .left-controls, body:not(.typing) .right-lists, body:not(.typing) #lyrics-box { display: none !important; }
   }
 </style>
 </head>
