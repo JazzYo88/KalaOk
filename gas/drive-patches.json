@@ -1,0 +1,57 @@
+[
+ [
+  "  function playVideo(videoId, index) {\n    if (index >= 0) playingListName = activePlaylistName; // 從歌單點的才記住歌單",
+  "  function playVideo(videoId, index, listName) {\n    if (index >= 0) playingListName = listName || activePlaylistName; // 從歌單點的才記住歌單（自動換下一首時沿用原本的歌單）",
+  1
+ ],
+ [
+  "    if(ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId);",
+  "    if (isDriveId(videoId)) playDriveAudio(videoId);\n    else { stopDriveAudio(); if(ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(videoId); }",
+  1
+ ],
+ [
+  "        playVideo(currentVideoId, currentPlayIndex);",
+  "        playVideo(currentVideoId, currentPlayIndex, playingListName);",
+  1
+ ],
+ [
+  "        playVideo(currentList[currentPlayIndex].id, currentPlayIndex);",
+  "        playVideo(currentList[currentPlayIndex].id, currentPlayIndex, playingListName);",
+  1
+ ],
+ [
+  "<img src=\"${video.thumbnail}\" onclick=\"playVideo('${video.id}', ${index})\">",
+  "<img src=\"${thumbOf(video)}\" onclick=\"playVideo('${video.id}', ${index})\">",
+  1
+ ],
+ [
+  "        <button class=\"btn-cancel\" style=\"background:#2196F3;",
+  "        <button class=\"btn-cancel\" style=\"background:#0F9D58; font-size: 0.8em; padding: 5px 10px; margin-right:5px;\" onclick=\"openDriveImportPrompt()\">☁️ 加入雲端音樂</button>\n        <button class=\"btn-cancel\" style=\"background:#2196F3;",
+  1
+ ],
+ [
+  "    if(!activePlaylistName) { alert(\"請先建立歌單！\"); return; }",
+  "    if(!activePlaylistName) { alert(\"請先建立歌單！\"); return; }\n    if (isDrivePlaylist(activePlaylistName)) { toast('☁️ 這是雲端音樂歌單，YouTube 歌曲請加到其他歌單'); return; }",
+  1
+ ],
+ [
+  "      } else if (promptMode === \"lyricsSearch\") {",
+  "      } else if (promptMode === \"driveImport\") {\n        importDriveLinks(newName);\n\n      } else if (promptMode === \"lyricsSearch\") {",
+  1
+ ],
+ [
+  "if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();",
+  "if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); stopDriveAudio();",
+  2
+ ],
+ [
+  "      btn.innerText = name;\n      btn.dataset.name = name;",
+  "      btn.innerText = (isDrivePlaylist(name) && name.indexOf('☁️') !== 0 ? '☁️ ' : '') + name;\n      btn.dataset.name = name;",
+  1
+ ],
+ [
+  "<div id=\"player-container\"><div id=\"player\"></div></div>",
+  "<div id=\"player-container\"><div id=\"player\"></div></div>\n        <!-- ☁️ 雲端硬碟音樂播放器（播雲端音樂時取代影片區） -->\n        <div id=\"drive-player\" style=\"display:none;\">\n          <div class=\"dp-icon\">☁️🎵</div>\n          <div class=\"dp-title\" id=\"drive-title\">雲端音樂</div>\n          <div class=\"dp-sub\" id=\"drive-sub\"></div>\n          <audio id=\"drive-audio\" controls preload=\"auto\" playsinline></audio>\n          <div class=\"dp-ctrl\"><button onclick=\"driveStep(-1)\">⏮ 上一首</button><button onclick=\"driveStep(1)\">下一首 ⏭</button></div>\n        </div>",
+  1
+ ]
+]
