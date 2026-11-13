@@ -5,3 +5,9 @@ GitHub Pages 版的後端是 Google Apps Script 專案「專屬點唱機」。�
 - `drive-backend.gs`：雲端硬碟音樂的後端（`addDriveLinks`、`authDrive`），附加在 `程式碼.gs` 最後面
 - `drive-patches.json`：前端共用的修改（`[原文, 新文, 次數]`），同樣套用在 GAS 的 `JavaScript.html` / `Index.html` 和這裡的 `index.html`
 - 雲端音樂前端模組：GitHub 版是 `../drive.js`，GAS 版直接貼在 `JavaScript.html` 最後面
+
+## ⚠️ 注意：GAS 會把字串裡的 `//` 當成註解刪掉
+
+`createHtmlOutputFromFile` 送出 HTML 時，會把 `<script>` 裡看起來像 `//` 註解的部分刪掉，
+連字串裡的 `'https://…'` 也會被切成 `'https:`，整支程式就會語法錯誤（畫面停在「載入中」）。
+前端程式裡的網址一律寫成 `'https:\/\/…'`（值完全一樣）。
