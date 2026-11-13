@@ -7,7 +7,7 @@
   function isDrivePlaylist(name) { const l = allPlaylists[name] || []; return l.length > 0 && l.every(v => isDriveId(v.id)); }
   function hasYouTubeSongs(name) { return (allPlaylists[name] || []).some(v => !isDriveId(v.id)); }
   const DRIVE_THUMB = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<svg xmlns="http:\/\/www.w3.org/2000/svg" viewBox="0 0 160 90"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
     '<stop offset="0" stop-color="#1B0B3B"/><stop offset="1" stop-color="#0B1B3D"/></linearGradient></defs>' +
     '<rect width="160" height="90" fill="url(#g)"/><text x="80" y="58" font-size="38" text-anchor="middle">☁️🎵</text></svg>');
   function thumbOf(v) { return isDriveId(v.id) ? DRIVE_THUMB : v.thumbnail; }
@@ -31,9 +31,9 @@
   // 雲端硬碟的直接播放網址（第一個失敗就換下一個）
   function driveUrls(fileId) {
     return [
-      'https://drive.google.com/uc?export=download&id=' + fileId,
-      'https://drive.usercontent.google.com/download?id=' + fileId + '&export=download',
-      'https://docs.google.com/uc?export=open&id=' + fileId
+      'https:\/\/drive.google.com/uc?export=download&id=' + fileId,
+      'https:\/\/drive.usercontent.google.com/download?id=' + fileId + '&export=download',
+      'https:\/\/docs.google.com/uc?export=open&id=' + fileId
     ];
   }
 
@@ -47,10 +47,15 @@
       a.addEventListener('error', () => {
         if (!driveCurrentId || !a.getAttribute('src')) return;
         const urls = driveUrls(driveCurrentId.slice(DRIVE_PREFIX.length));
+        const code = a.error ? a.error.code : 0;
+        (a._jkErrs = a._jkErrs || []).push((['', '中斷', '網路', '解碼', '不支援'][code] || '未知') + code);
         a._jkTried = (a._jkTried || 0) + 1;
         driveUrlIdx = (driveUrlIdx + 1) % urls.length;
         if (a._jkTried < urls.length) { a.src = urls[driveUrlIdx]; a.play().catch(() => {}); return; }
-        driveToast('⚠️ 這首無法播放\n請確認雲端硬碟的檔案已設為「知道連結的任何人都能查看」', 6000);
+        // 三個網址都失敗：顯示真正的錯誤代碼（分享設定在匯入時已經檢查過）
+        driveSub('⚠️ 無法播放（' + a._jkErrs.join('、') + '）');
+        showDriveOpen(true);
+        driveToast('⚠️ 這首在網頁裡無法播放（' + a._jkErrs.join('、') + '）\n可以先按「在雲端硬碟開啟」收聽', 7000);
       });
       a.addEventListener('playing', () => { driveGoodIdx = driveUrlIdx; driveSub(''); setMediaPlaying(true); });
       a.addEventListener('pause', () => setMediaPlaying(false));
@@ -60,6 +65,24 @@
   }
 
   function driveSub(text) { const s = document.getElementById('drive-sub'); if (s) s.innerText = text; }
+
+  // 備案：直接在雲端硬碟開啟這首（網頁播放失敗時顯示）
+  function showDriveOpen(on) {
+    const dp = document.getElementById('drive-player');
+    if (!dp) return;
+    let link = document.getElementById('drive-open');
+    if (!link) {
+      link = document.createElement('a');
+      link.id = 'drive-open';
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.innerText = '在雲端硬碟開啟 ↗';
+      link.style.cssText = 'color:#FFDF00; font-size:15px; text-decoration:underline;';
+      dp.appendChild(link);
+    }
+    link.href = driveCurrentId ? 'https:\/\/drive.google.com/file/d/' + driveCurrentId.slice(DRIVE_PREFIX.length) + '/view' : '#';
+    link.style.display = on ? '' : 'none';
+  }
 
   function driveToast(msg, ms) {
     toast(msg);
@@ -76,7 +99,8 @@
     document.getElementById('drive-player').style.display = '';
     document.getElementById('drive-title').innerText = item.title || '雲端音樂';
     driveSub('⏳ 載入中…');
-    driveCurrentId = id; driveUrlIdx = driveGoodIdx; a._jkTried = 0;
+    driveCurrentId = id; driveUrlIdx = driveGoodIdx; a._jkTried = 0; a._jkErrs = [];
+    showDriveOpen(false);
     a.src = driveUrls(id.slice(DRIVE_PREFIX.length))[driveUrlIdx];
     const p = a.play();
     if (p && p.catch) p.catch(err => { if (err && err.name === 'NotAllowedError') driveSub('請按 ▶ 開始播放'); });
@@ -140,7 +164,7 @@
       : `貼上雲端硬碟「資料夾」或「歌曲」的分享連結\n加入 [${activePlaylistName}]`;
     const input = document.getElementById('custom-prompt-input');
     input.value = '';
-    input.placeholder = 'https://drive.google.com/…（多個連結用空白隔開）';
+    input.placeholder = 'https:\/\/drive.google.com/…（多個連結用空白隔開）';
     document.getElementById('custom-prompt-overlay').style.display = 'flex';
     input.focus();
   }
