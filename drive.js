@@ -37,7 +37,83 @@
     ];
   }
 
-  let driveCurrentId = '', driveUrlIdx = 0, driveGoodIdx = 0;   // 記住哪個網址能播，下一首直接用（鎖屏自動換歌比較不會卡）
+  // 第 4 個來源：請點唱機的 GAS 伺服器代為下載（手機直連被雲端硬碟擋下時使用）
+  const DRIVE_PROXY_IDX = 3, DRIVE_SOURCES = 4;
+  let driveCurrentId = '', driveUrlIdx = 0, driveGoodIdx = 0;   // 記住哪個來源能播，下一首直接用（鎖屏自動換歌比較不會卡）
+  try { driveGoodIdx = Math.min(DRIVE_SOURCES - 1, parseInt(localStorage.getItem('jk_driveSrc')) || 0); } catch (e) {}
+
+  function gsRun(fn, args) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn].apply(null, args);
+    });
+  }
+
+  // 伺服器代載：分段（每段 4MB）平行下載，組成 Blob 再播放；最近 3 首留在手機記憶體裡
+  const proxyCache = new Map();   // fileId → Promise<blobUrl>
+  function proxyAudioUrl(fileId, onProgress) {
+    if (proxyCache.has(fileId)) return proxyCache.get(fileId);
+    const job = (async () => {
+      const first = await gsRun('getDriveAudioChunk', [fileId, 0]);
+      const parts = new Array(first.parts);
+      parts[0] = first.data;
+      let done = 1;
+      if (onProgress) onProgress(Math.round(done * 100 / first.parts));
+      const queue = [];
+      for (let i = 1; i < first.parts; i++) queue.push(i);
+      const worker = async () => {
+        while (queue.length) {
+          const i = queue.shift();
+          parts[i] = (await gsRun('getDriveAudioChunk', [fileId, i])).data;
+          done++;
+          if (onProgress) onProgress(Math.round(done * 100 / first.parts));
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      const bytes = parts.map(b64 => { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; });
+      return URL.createObjectURL(new Blob(bytes, { type: first.mime || 'audio/mpeg' }));
+    })();
+    proxyCache.set(fileId, job);
+    job.catch(() => proxyCache.delete(fileId));
+    // 只保留最近 3 首，舊的釋放記憶體（正在播的不釋放）
+    while (proxyCache.size > 3) {
+      const oldest = proxyCache.keys().next().value;
+      if (driveCurrentId === DRIVE_PREFIX + oldest) break;
+      const pr = proxyCache.get(oldest); proxyCache.delete(oldest);
+      pr.then(u => URL.revokeObjectURL(u)).catch(() => {});
+    }
+    return job;
+  }
+
+  // 依目前的來源編號載入：0~2 直連，3 伺服器代載
+  function driveTry(a) {
+    const fileId = driveCurrentId.slice(DRIVE_PREFIX.length);
+    if (driveUrlIdx !== DRIVE_PROXY_IDX) { a.src = driveUrls(fileId)[driveUrlIdx]; a.play().catch(() => {}); return; }
+    const myId = driveCurrentId;
+    driveSub('⏳ 透過點唱機伺服器載入中…');
+    proxyAudioUrl(fileId, pct => { if (driveCurrentId === myId) driveSub('⏳ 透過點唱機伺服器載入中… ' + pct + '%'); })
+      .then(url => { if (driveCurrentId !== myId) return; a.src = url; a.play().catch(() => {}); })
+      .catch(err => {
+        if (driveCurrentId !== myId) return;
+        (a._jkErrs = a._jkErrs || []).push('伺服器：' + ((err && err.message) || err));
+        a._jkTried = DRIVE_SOURCES;
+        driveFail(a);
+      });
+  }
+
+  function driveFail(a) {
+    driveSub('⚠️ 無法播放（' + (a._jkErrs || []).join('、') + '）');
+    showDriveOpen(true);
+    driveToast('⚠️ 這首在網頁裡無法播放（' + (a._jkErrs || []).join('、') + '）\n可以先按「在雲端硬碟開啟」收聽', 7000);
+  }
+
+  // 播放中先把下一首下載好（只在走伺服器代載時需要）
+  function prefetchNextDrive() {
+    if (driveUrlIdx !== DRIVE_PROXY_IDX) return;
+    const list = allPlaylists[playingListName] || [];
+    if (!list.length || currentPlayIndex < 0) return;
+    const next = list[(currentPlayIndex + 1) % list.length];
+    if (next && isDriveId(next.id) && next.id !== driveCurrentId) proxyAudioUrl(next.id.slice(DRIVE_PREFIX.length)).catch(() => {});
+  }
 
   function driveAudioEl() {
     const a = document.getElementById('drive-audio');
@@ -46,18 +122,19 @@
       a.addEventListener('ended', () => driveStep(1, true));
       a.addEventListener('error', () => {
         if (!driveCurrentId || !a.getAttribute('src')) return;
-        const urls = driveUrls(driveCurrentId.slice(DRIVE_PREFIX.length));
         const code = a.error ? a.error.code : 0;
         (a._jkErrs = a._jkErrs || []).push((['', '中斷', '網路', '解碼', '不支援'][code] || '未知') + code);
         a._jkTried = (a._jkTried || 0) + 1;
-        driveUrlIdx = (driveUrlIdx + 1) % urls.length;
-        if (a._jkTried < urls.length) { a.src = urls[driveUrlIdx]; a.play().catch(() => {}); return; }
-        // 三個網址都失敗：顯示真正的錯誤代碼（分享設定在匯入時已經檢查過）
-        driveSub('⚠️ 無法播放（' + a._jkErrs.join('、') + '）');
-        showDriveOpen(true);
-        driveToast('⚠️ 這首在網頁裡無法播放（' + a._jkErrs.join('、') + '）\n可以先按「在雲端硬碟開啟」收聽', 7000);
+        driveUrlIdx = (driveUrlIdx + 1) % DRIVE_SOURCES;
+        if (a._jkTried < DRIVE_SOURCES) { driveTry(a); return; }
+        driveFail(a);   // 全部來源都失敗：顯示真正的錯誤代碼
       });
-      a.addEventListener('playing', () => { driveGoodIdx = driveUrlIdx; driveSub(''); setMediaPlaying(true); });
+      a.addEventListener('playing', () => {
+        driveGoodIdx = driveUrlIdx;
+        try { localStorage.setItem('jk_driveSrc', String(driveGoodIdx)); } catch (e) {}
+        driveSub(''); setMediaPlaying(true);
+        prefetchNextDrive();
+      });
       a.addEventListener('pause', () => setMediaPlaying(false));
       a.addEventListener('waiting', () => driveSub('⏳ 載入中…'));
     }
@@ -101,9 +178,15 @@
     driveSub('⏳ 載入中…');
     driveCurrentId = id; driveUrlIdx = driveGoodIdx; a._jkTried = 0; a._jkErrs = [];
     showDriveOpen(false);
-    a.src = driveUrls(id.slice(DRIVE_PREFIX.length))[driveUrlIdx];
-    const p = a.play();
-    if (p && p.catch) p.catch(err => { if (err && err.name === 'NotAllowedError') driveSub('請按 ▶ 開始播放'); });
+    if (driveUrlIdx === DRIVE_PROXY_IDX) {
+      // 走伺服器代載要等下載完才有聲音；先在點擊當下解鎖播放器（iPhone 需要）
+      try { a.muted = true; const u = a.play(); if (u && u.catch) u.catch(() => {}); a.pause(); a.muted = false; } catch (e) {}
+      driveTry(a);
+    } else {
+      a.src = driveUrls(id.slice(DRIVE_PREFIX.length))[driveUrlIdx];
+      const p = a.play();
+      if (p && p.catch) p.catch(err => { if (err && err.name === 'NotAllowedError') driveSub('請按 ▶ 開始播放'); });
+    }
     updateMediaSession(item.title);
     // 雲端音樂暫時不顯示字幕
     if (typeof lyricsOn !== 'undefined' && lyricsOn) {

@@ -87,3 +87,35 @@ function isAudioFile_(file) {
 function cleanSongName_(name) {
   return String(name).replace(/\.[a-z0-9]{2,5}$/i, '').replace(/^\s*\d{1,3}\s*[-._、)]\s*/, '').replace(/^\s*\d{1,3}\s+/, '').trim() || String(name);
 }
+
+// ☁️ 伺服器代載：手機直接向雲端硬碟要檔案被擋下時，由點唱機伺服器分段下載再交給手機播放
+// 安全限制：只代載「點唱機歌單裡有的」而且「有公開分享」的檔案，避免變成任何人都能下載整個雲端硬碟
+var DRIVE_CHUNK_ = 4 * 1024 * 1024;
+function getDriveAudioChunk(fileId, part) {
+  fileId = String(fileId || '').replace(/[^\w-]/g, '');
+  part = Math.max(0, parseInt(part, 10) || 0);
+  if (!fileId) throw new Error('缺少檔案');
+
+  var cache = CacheService.getScriptCache(), key = 'gdmeta_' + fileId;
+  var meta = cache.get(key);
+  if (meta) meta = JSON.parse(meta);
+  else {
+    var ids = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Playlists').getRange('C:C').getValues();
+    var inList = ids.some(function (r) { return r[0] === 'gd:' + fileId; });
+    if (!inList) throw new Error('這首不在點唱機的歌單裡');
+    var f = DriveApp.getFileById(fileId), acc = f.getSharingAccess();
+    if (acc !== DriveApp.Access.ANYONE && acc !== DriveApp.Access.ANYONE_WITH_LINK) throw new Error('這個檔案沒有公開分享');
+    meta = { mime: f.getMimeType(), size: f.getSize() };
+    if (meta.size > 60 * 1024 * 1024) throw new Error('檔案超過 60MB，太大了');
+    cache.put(key, JSON.stringify(meta), 3600);
+  }
+
+  var parts = Math.max(1, Math.ceil(meta.size / DRIVE_CHUNK_));
+  if (part >= parts) throw new Error('段落超出範圍');
+  var start = part * DRIVE_CHUNK_, end = Math.min(meta.size, start + DRIVE_CHUNK_) - 1;
+  var res = UrlFetchApp.fetch('https://drive.usercontent.google.com/download?id=' + fileId + '&export=download',
+    { headers: { Range: 'bytes=' + start + '-' + end }, muteHttpExceptions: true });
+  var code = res.getResponseCode();
+  if (code !== 206 && !(code === 200 && parts === 1)) throw new Error('雲端硬碟回應 ' + code);
+  return { mime: meta.mime, size: meta.size, parts: parts, part: part, data: Utilities.base64Encode(res.getContent()) };
+}
